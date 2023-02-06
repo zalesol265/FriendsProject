@@ -1,0 +1,87 @@
+---
+title: "Friends analysis"
+author: "Olivia"
+date: '2023-02-05'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rstudioapi)
+knitr::opts_knit$set(root.dir = paste0(dirname(getActiveDocumentContext()$path), '\\ALL_Seasons'))
+```
+
+## Word Clouds
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r get_scripts}
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(tidytext)
+source("..\\Friends.R") 
+
+```
+
+### Get script
+```{r}
+master_script <- scrape_files()
+```
+
+
+### Get just the characters and dialogue
+
+Also add row ids and remove all empty rows.
+The row ids will be later used to combine word scores to calculate the total score for each sentence.
+
+```{r}
+df <- master_script[,c("character", "dialogue")]
+df <- df %>% mutate(master_id = row_number()) 
+
+df <- df %>% filter(df$dialogue != '')
+```
+
+
+### Tokenization
+
+
+Use tidytext to tokenize the script and separate each individual word. 
+
+```{r}
+
+# Tokenize all the sentences and put each word on a new 
+token <- df %>%  tidytext::unnest_tokens(output = "word", input = dialogue)
+token_clean <- token %>% anti_join(y=stop_words, by="word")
+
+
+```
+
+
+
+### Get affin score for each row
+
+```{r}
+
+# Get the affin lexicon
+affin <- get_sentiments(lexicon = "afinn")
+sentiment_affin <- token_clean %>% inner_join(y=affin)
+row_sentiment <- sentiment_affin %>% group_by(master_id) %>% summarise("affin_value" = sum(value))
+df <- merge(df, row_sentiment, all=T)
+
+hist(df$affin_value)
+
+```
+
+
+### Loughran
+
+```{r}
+
+loughran <- get_sentiments(lexicon = "loughran")
+sentiment_loughran <- token_clean %>% inner_join(y=loughran)
+
+```
+
