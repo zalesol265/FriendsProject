@@ -1,6 +1,5 @@
 ---
 title: "Friends analysis"
-author: "Olivia"
 date: '2023-02-05'
 output: html_document
 ---
@@ -11,24 +10,30 @@ library(rstudioapi)
 knitr::opts_knit$set(root.dir = paste0(dirname(getActiveDocumentContext()$path), '\\ALL_Seasons'))
 ```
 
-## Word Clouds
+# Friends Text Analysis
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r get_scripts}
+```{r get_scripts, warning=FALSE, message=FALSE, echo=FALSE}
 library(dplyr)
 library(stringr)
 library(tidyr)
 library(tidytext)
-source("..\\Friends.R") 
+library(knitr)
+library(ggplot2)
+library(kableExtra)
+library(scales)
 
 ```
 
 ### Get script
-```{r}
-master_script <- scrape_files()
+
+Also set character names so that ROSS and Ross and ross are all formatted the same.
+```{r warning=FALSE, message=FALSE}
+
+  master_script <- readRDS('friends_script.RData')
+  master_script$character <- str_to_title(master_script$character)
+  
+
 ```
 
 
@@ -37,7 +42,7 @@ master_script <- scrape_files()
 Also add row ids and remove all empty rows.
 The row ids will be later used to combine word scores to calculate the total score for each sentence.
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 df <- master_script[,c("character", "dialogue")]
 df <- df %>% mutate(master_id = row_number()) 
 
@@ -50,7 +55,7 @@ df <- df %>% filter(df$dialogue != '')
 
 Use tidytext to tokenize the script and separate each individual word. 
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 
 # Tokenize all the sentences and put each word on a new 
 token <- df %>%  tidytext::unnest_tokens(output = "word", input = dialogue)
@@ -63,25 +68,84 @@ token_clean <- token %>% anti_join(y=stop_words, by="word")
 
 ### Get affin score for each row
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 
 # Get the affin lexicon
 affin <- get_sentiments(lexicon = "afinn")
-sentiment_affin <- token_clean %>% inner_join(y=affin)
-row_sentiment <- sentiment_affin %>% group_by(master_id) %>% summarise("affin_value" = sum(value))
-df <- merge(df, row_sentiment, all=T)
+word_sentiment_affin <- token_clean %>% inner_join(y=affin)
+row_sentiment <- word_sentiment_affin %>% group_by(master_id) %>% summarise("affin_value" = sum(value))
+affin_df <- merge(df, row_sentiment, all=T)
+affin_df["affin_value"][is.na(affin_df["affin_value"])] <- 0
 
-hist(df$affin_value)
+affin_df %>% ggplot(aes(x=affin_value)) + geom_bar()
+
 
 ```
 
 
-### Loughran
 
-```{r}
+### Affin: Sentences with the highest positive scores
 
+
+```{r warning=FALSE, message=FALSE}
+
+affin_df <- affin_df[order(affin_df$affin_value, decreasing=TRUE),]
+kable(affin_df[0:5,c('character', 'dialogue')]) %>%
+  kable_styling()
+
+```
+
+
+
+### Affin: Sentences with the highest negative scores
+
+
+
+```{r warning=FALSE, message=FALSE}
+
+affin_df <- affin_df[order(affin_df$affin_value),]
+kable(affin_df[0:5,c('character', 'dialogue')]) %>%
+  kable_styling()
+
+```
+  
+  
+### Get Loughran score
+
+```{r warning=FALSE, message=FALSE}
 loughran <- get_sentiments(lexicon = "loughran")
 sentiment_loughran <- token_clean %>% inner_join(y=loughran)
+
+loughran_count <- sentiment_loughran %>% group_by(sentiment) %>% summarise(n=n())
+loughran_count %>% ggplot(aes(x=sentiment, y=n)) + geom_bar(stat="identity")
+```
+
+
+
+
+### Loughran score by character
+
+```{r warning=FALSE, message=FALSE}
+totals <- sentiment_loughran %>% 
+          filter(character == 'Ross' |
+                   character =='Phoebe' |
+                   character == 'Chandler' |
+                   character == 'Monica' |
+                   character == 'Rachel' |
+                   character == 'Joey' ) %>% 
+          group_by(character, sentiment) %>% 
+          summarise(n=n())
+
+totals_pivot <- totals %>% pivot_wider(names_from = 'sentiment', values_from = n)
+kable(totals_pivot) %>%
+  kable_styling()
+
+
+totals %>% ggplot(aes(sentiment, character)) + 
+  geom_tile(aes(fill = n)) +
+  geom_text(label = totals$n, colour='#ffffff') + 
+  scale_y_discrete(limits = rev) +
+  scale_x_discrete(position = "top")
 
 ```
 
