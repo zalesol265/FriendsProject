@@ -4,6 +4,7 @@ library(tidyverse)
 library(stringi)
 library(rstudioapi)
 library(lubridate)
+library(textclean)
 
 
 separate_script_and_scenes <- function(scripts) {
@@ -20,7 +21,6 @@ separate_script_and_scenes <- function(scripts) {
   }
   lines_to_split <- filter(scripts, grepl('[[]Scene.*[]].*:.*', script))
   lines_to_split <- arrange(lines_to_split, desc(row_id))
-  print(lines_to_split)
   if(nrow(lines_to_split)!=0){
     for(i in 1:nrow(lines_to_split)){
       split_row <- str_split(lines_to_split$script[i], "\\]")
@@ -105,17 +105,19 @@ cur_file <- 0
 
 for(file_name in myfiles){
   
-#   if (file_name != '0209-test.html') { # replace XXXX with the file name if you want to test a single file
-#     next
-#   }
+   # if (file_name != '0311.html') { # replace XXXX with the file name if you want to test a single file
+   #   next
+   # }
 
   # Update progress bar
   setTxtProgressBar(pb, cur_file)
   cat(paste(" | Files processed:", cur_file,
-            "| Current file:", file_name)," ")
+            "| Current file:", file_name),"             ")
   
   # Use rvest to read in the script
   episode_html <- rvest::read_html(x = file_name, encoding = "UTF-8")
+
+
   episode_title <- iconv(html_elements(x = episode_html, css ="title"), "UTF-8", "ASCII", sub="") 
   episode_title <- str_replace_all(episode_title, c('<title>'='', '</title>'='', '\\\n'=''))
   episode_title = str_to_title(episode_title)
@@ -123,7 +125,8 @@ for(file_name in myfiles){
                   regexpr('The Last One', episode_title)[1])
 
   script_paragraphs <- html_elements(x = episode_html, css ="p") %>% html_text()
-  script_paragraphs = iconv(script_paragraphs, "UTF-8", "ASCII", sub="")
+  script_paragraphs = iconv(script_paragraphs, "UTF-8", "ASCII", sub="~~~~")
+  script_paragraphs = str_replace_all(script_paragraphs, c("~~~~~~~~" = "'"))
   
   if (is_empty(script_paragraphs) | length(script_paragraphs) < 20) { # patch for various episodes (e.g., 0204, 0911...)
     temp <- episode_html %>% html_text2()
@@ -156,7 +159,6 @@ for(file_name in myfiles){
   tib_script <- tib_script %>% filter(script != "")
   
   # find transcribers
-  
   transcribe_marks = str_locate_all(pattern ='ranscrib', full_text)
   transcribe_marks[[2]] = list(NA)
   if(nrow(transcribe_marks[[1]]) > 0) {
